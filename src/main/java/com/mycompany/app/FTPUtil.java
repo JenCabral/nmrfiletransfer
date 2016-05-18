@@ -41,7 +41,7 @@ public class FTPUtil {
 		// System.out.println(subFiles.length);
 		if (subFiles != null && subFiles.length > 0) {
 			for (FTPFile aFile : subFiles) {
-				String currentFileName = aFile.getName();
+				String currentFileName = aFile.getName().toLowerCase();
 				// System.out.println(currentFileName);
 				if (currentFileName.equals(".") || currentFileName.equals("..")) {
 					// skip parent directory and the directory itself

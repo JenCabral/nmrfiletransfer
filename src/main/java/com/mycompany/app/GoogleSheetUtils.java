@@ -166,31 +166,36 @@ public class GoogleSheetUtils {
 	/**
 	 * Process the input sheet. Validates each row according to the database and input directory.
 	 */
-	public static JSONArray processInputSheet() {
-		JSONArray newFilesMap = new JSONArray();
+	public static HashMap<String,JSONObject> processInputSheet() {
+		HashMap<String,JSONObject> newFilesMap = new HashMap<String,JSONObject>();
 		try {
 			for (ListEntry e : service.getFeed(inputWorksheet.getListFeedUrl(), ListFeed.class).getEntries()) {
-				String peakid = e.getCustomElements().getValue("peakid");
-				System.out.println(peakid);
-				if(peakid != null){
-					String fileName=e.getCustomElements().getValue("nmrFileName");
+				String fileName=e.getCustomElements().getValue("nmrFileName");
+				System.out.println(fileName);
+				if(fileName != null){
+					String peakid = e.getCustomElements().getValue("peakid");
 					String researcher=e.getCustomElements().getValue("researcher");
 					String instrument=e.getCustomElements().getValue("instrument");
 					String organization=e.getCustomElements().getValue("organization");
-					String sample=e.getCustomElements().getValue("sample");
 					String username=e.getCustomElements().getValue("username");
-					System.out.println(sample+" "+fileName+" "+researcher+" "+username+" "+instrument+" "+organization+" "+peakid);
+					String comment=e.getCustomElements().getValue("comment");
+					String date=e.getCustomElements().getValue("date");
+					String moveFlag=e.getCustomElements().getValue("moved");
+					System.out.println(fileName+" "+researcher+" "+username+" "+
+						instrument+" "+organization+" "+peakid+" "+comment+" "+date+" "+moveFlag);
 					JSONObject jo = new JSONObject();
-					jo.put("sample",sample);
-					jo.put("nmrFileName",fileName);
+					jo.put("nmrFileName",fileName.toLowerCase());
 					jo.put("researcher",researcher);
 					jo.put("instrument",instrument);
 					jo.put("organization",organization);
 					jo.put("peakid",peakid);
 					jo.put("username",username);
-					newFilesMap.put(jo);
-
+					jo.put("comment",comment);
+					jo.put("date",date);
+					jo.put("moved",moveFlag);
+					newFilesMap.put(fileName.toLowerCase(),jo);
 				}
+				e.delete(); 
 			}
 		}
 		catch(ServiceException | IOException e){
@@ -199,7 +204,7 @@ public class GoogleSheetUtils {
 			Utils.sendNotificationEmail("Failed to gather ready samples from Google Sheet", 
 					"Failed to gather ready samples from Google Sheet " + Utils.getStackTrace(e));
 		}
-		// System.out.println(newFilesMap.containsKey("123456"));
+		System.out.println(newFilesMap.containsKey("123456"));
 		return newFilesMap;	
 	}
 	
@@ -423,23 +428,23 @@ public class GoogleSheetUtils {
 	}
 
 
-	public static void updateMoved(JSONArray itemsMoved){
+	public static void updateMoved(HashMap<String,JSONObject> itemsMoved){
 		updateWorksheet(itemsMoved, completedWorksheet);
 	}
 
-	public static void updateMissingInfo(JSONArray itemsMissingInfo){
-		updateWorksheet(itemsMissingInfo, missingInfoWorksheet);
+	public static void updateMissingInfo(HashMap<String,JSONObject> itemsMissingInfo){
+		updateWorksheet(itemsMissingInfo, inputWorksheet);
 	}
 
 
-	public static void updateWorksheet(JSONArray items, WorksheetEntry worksheetToUpdate){
+	public static void updateWorksheet(HashMap<String,JSONObject> items, WorksheetEntry worksheetToUpdate){
 		long startTime = System.currentTimeMillis();
 		
 		// Prepare Spreadsheet Service
 		SpreadsheetService ssSvc = service;
 		
 		
-		List<String> completedHeaders = Arrays.asList("nmrFileName","peakid","sample","researcher","username","instrument","organization","comments");
+		List<String> completedHeaders = Arrays.asList("nmrFileName","peakid","researcher","username","instrument","organization","comments","date");
 		
 		
 		
@@ -453,13 +458,20 @@ public class GoogleSheetUtils {
 			// Build list of cell addresses to be filled in
 			List<CellAddress> cellAddrs = new ArrayList<CellAddress>();
 			
-			for(int header=0; header<6; header++){
+			for(int header=0; header<8; header++){
 				System.out.println("Getting values for header: " + completedHeaders.get(header));
 				if(items!=null){
-					for(int row=2; row < items.length()+2; row++){
-						JSONObject temp = items.getJSONObject(row-2);
-						cellAddrs.add(new CellAddress(row,header + 1,temp.getString(completedHeaders.get(header))));
-						System.out.println(temp.getString(completedHeaders.get(header)));
+					int row = 2;
+					for(String currentFile : items.keySet()){
+						JSONObject temp = items.get(currentFile);
+						if(temp.has(completedHeaders.get(header))){
+							cellAddrs.add(new CellAddress(row,header + 1,temp.getString(completedHeaders.get(header))));
+							System.out.println(temp.getString(completedHeaders.get(header)));
+						}else{
+							cellAddrs.add(new CellAddress(row,header + 1,""));
+							System.out.println("\n");
+						}
+						row++;
 					}
 				}
 			}

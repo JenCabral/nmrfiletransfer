@@ -52,37 +52,37 @@ private static String SAVEPATH;
 private static String DATESTRING;
 private static Timestamp LASTUPDATE;
 private static String NEWTIME;
-private static JSONArray RETURNED;
+private static HashMap<String,JSONObject> RETURNED;
 private static JSONArray MOVED;
 private static JSONArray MISSINGINFO;
 private static ArrayList<String> FILESMOVED;
-private static HashMap<String,String> IDTOFILENAMEMAP;
-private static JSONArray MOVEDFILESFORGRAPH;
-
-
-// public static final String GOOGLE_ACCOUNT_USERNAME = "devjencabral@gmail.com"; // Fill in google account username
-// public static final String GOOGLE_ACCOUNT_PASSWORD = "timmy123"; // Fill in google account password
-// public static final String SPREADSHEET_URL = "https://spreadsheets.google.com/feeds/spreadsheets/1xJLaygdhH3ivSfvJAIiAQYf2rDBch0P98fP6xwJbNwI"; //Fill in google spreadsheet URI
+// private static HashMap<String,String> IDTOFILENAMEMAP;
+private static HashMap<String,JSONObject> MOVEDFILESFORGRAPH;
+private static HashMap<String,JSONObject> NOINFOFOUND;
+private static HashMap<String,JSONObject> FILESNOTFOUND;
 
 
 	public static void main(String[] args) throws IOException, ServiceException{
 		// GET INFO FROM THE SPREADSHEET
 		ALLUSERNAMES = new ArrayList<String>();
-		
-		IDTOFILENAMEMAP = new HashMap();
+
+		MOVEDFILESFORGRAPH = new HashMap();
+		NOINFOFOUND = new HashMap();
+		FILESNOTFOUND = new HashMap();
+		// IDTOFILENAMEMAP = new HashMap();
+
 		RETURNED = GoogleSheetUtils.processInputSheet();
 		// System.out.println(returned.containsKey("123456"));
-		for(int i=0; i<RETURNED.length(); i++){
-			JSONObject jo = RETURNED.getJSONObject(i);
-			System.out.println(jo.getString("peakid")+" "+jo.getString("nmrFileName"));
-			IDTOFILENAMEMAP.put(jo.getString("peakid"),jo.getString("nmrFileName").toLowerCase());
-			if (!ALLUSERNAMES.contains(jo.getString("username").toLowerCase())){
-				ALLUSERNAMES.add(jo.getString("username").toLowerCase());
+		for(String fileName : RETURNED.keySet() ){
+			JSONObject jo = RETURNED.get(fileName);
+			System.out.println(jo.getString("peakid")+" "+fileName);
+			// IDTOFILENAMEMAP.put(fileName.toLowerCase(),jo.getString("peakid"));
+			if (!ALLUSERNAMES.contains(jo.getString("username"))){
+				ALLUSERNAMES.add(jo.getString("username"));
 			}
 			// Arrays.asList(yourArray).contains(yourValue)
-			
 		}
-		
+		System.out.println("NAME MAP BEFORE SEARCHING: "+RETURNED.keySet());
 		// GET ALL THE PARAMETERS FOR THE FTP SERVER
 		try{
 			jarPath = new File(FTPDownloadDirectoryTest.class.getProtectionDomain().getCodeSource().getLocation().toURI().getPath());
@@ -120,8 +120,6 @@ private static JSONArray MOVEDFILESFORGRAPH;
 				e.printStackTrace();
 			}
 			
-			
-
 			configIn.close();
 
 			// GET INFO FROM THE SERVER	
@@ -159,12 +157,12 @@ private static JSONArray MOVEDFILESFORGRAPH;
 		        while ((s = br.readLine()) != null) {
 		            totalStr += s;
 		            totalStr += "\n";
-		            System.out.println(s);
+		            // System.out.println(s);
 		        }
 		        totalStr = totalStr.replaceAll(searchDate, replaceDate);
 		        totalStr = totalStr.replaceAll(searchNames, replaceNames);
 		        FileWriter fw = new FileWriter(configFile);
-		        System.out.println(totalStr);
+		        // System.out.println(totalStr);
 		    	fw.write(totalStr);
 		    	fw.close();
 	    	}catch(Exception e){
@@ -173,9 +171,14 @@ private static JSONArray MOVEDFILESFORGRAPH;
 		}catch(Exception e){
 		    e.printStackTrace();
 		}
+		for(String currentFile : RETURNED.keySet()){
+			JSONObject temp = RETURNED.get(currentFile);
+			temp.put("comments","FILE NOT FOUND");
+			NOINFOFOUND.put(currentFile.toLowerCase(),temp);
+		}
 		// Update the google sheets
-		GoogleSheetUtils.updateMoved(MOVED);
-		GoogleSheetUtils.updateMissingInfo(MISSINGINFO);
+		GoogleSheetUtils.updateMoved(MOVEDFILESFORGRAPH);
+		GoogleSheetUtils.updateMissingInfo(NOINFOFOUND);
 	}
 
 private static void transferFiles(){
@@ -194,6 +197,7 @@ private static void transferFiles(){
 
 		System.out.println("Connected");
 		for(String user : ALLUSERNAMES){
+			// System.out.println(user);
 			String prePath = PREPATH+"/"+user+"/data/";
 
 			String remoteDirPath = user+"/nmr";
@@ -205,21 +209,39 @@ private static void transferFiles(){
 				if(subFiles[j].getTimestamp().getTime().compareTo(LASTUPDATE)>=0){
 					// System.out.println("NEW FILE");
 					String currentFileName = subFiles[j].getName();
-					System.out.println(currentFileName);
+					System.out.println(currentFileName.toLowerCase());
 					
 					String fullPath2 = fullPath +"/"+ currentFileName;
+					String remoteDirPath2 = remoteDirPath+"/"+currentFileName.toLowerCase();
 					FILESMOVED.add(currentFileName.toLowerCase());
-					// if(IDTOFILENAMEMAP.containsValue(currentFileName.toLowerCase())){
-					// 	String key=IDTOFILENAMEMAP.getKey(currentFileName.toLowerCase());
-					// 	IDTOFILENAMEMAP.put(key, fullPath2);
-					// }
-					String remoteDirPath2 = remoteDirPath+"/"+currentFileName;
+					String newsavepath = SAVEPATH+remoteDirPath2;
+					SimpleDateFormat dateFormat = new SimpleDateFormat("EEE MMM dd HH:mm:ss z yyyy");
+					String filecreated  = dateFormat.format(subFiles[j].getTimestamp().getTime());
+					System.out.println(filecreated);
+					if(RETURNED.containsKey(currentFileName.toLowerCase())){
+						JSONObject value=RETURNED.get(currentFileName.toLowerCase());
+						value.put("nmrFileName",newsavepath);
+						value.put("date",filecreated);
+						RETURNED.remove(currentFileName.toLowerCase());
+						MOVEDFILESFORGRAPH.put(newsavepath,value);
+						System.out.println("IF SAVE PATH "+newsavepath);
+					}else{
+						JSONObject userComment = new JSONObject();
+						userComment.put("username",user);
+						userComment.put("comments","Missing peakID");
+						userComment.put("nmrFileName",newsavepath);
+						userComment.put("date",filecreated);
+						NOINFOFOUND.put(newsavepath,userComment);
+					}
+					
 					FTPUtil.downloadDirectory(ftpClient, fullPath2, "", SAVEPATH,remoteDirPath2);
 				}
 
 			}
+			
 		}
-
+		System.out.println("NEW MAPPING LOCATIONS: "+MOVEDFILESFORGRAPH.keySet());
+		System.out.println("NO INFO FOUND FOR: "+NOINFOFOUND);
 		// log out and disconnect from the server
 		ftpClient.logout();
 		ftpClient.disconnect();
