@@ -13,7 +13,8 @@ FTPServer=130.113.155.252
 FTPPort=21
 
 #Magarvey Lab Usernames on the NMR Machine
-NMRUsers=kaura12,johnsc7,zvanycr,denis2,
+NMRUsers=zvanycr
+#,johnsc7,,kaura12,wyattam
 
 #NMR Prepath - the path to the user folders
 Prepath=/userdata/MDCLAV700/data
@@ -22,7 +23,7 @@ Prepath=/userdata/MDCLAV700/data
 Savepath=/Users/jenwork/Downloads/NMRTestFolder2/
 
 #Last Update in timestamp format
-LastUpdate=Wed May 01 09:15:41 EDT 2016
+LastUpdate=Wed May 01 09:15:41 EDT 1900
 
 
 # Use a comma separated list of e-mails for error recipient
